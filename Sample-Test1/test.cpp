@@ -1,9 +1,11 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-
+#include <iostream>
 #include "../DeviceDriver/DeviceDriver.cpp"
+#include <string>
 
 using namespace testing;
+//using namespace std;
 
 class MockFlashMemoryDevice : public FlashMemoryDevice {
 public:
@@ -13,8 +15,21 @@ public:
 
 class DeviceDeriverTestFixture : public testing::Test {
 public:
-	MockFlashMemoryDevice mockFlash;
-	DeviceDriver dd{ &mockFlash };
+	NiceMock<MockFlashMemoryDevice> mockFlash;
+	NiceMock<DeviceDriver> dd{ &mockFlash };
+	App app{ dd };
+
+	string getPrintResult(int address, int value) {
+		ostringstream oss;
+		auto oldCoutStreamBuf = cout.rdbuf();
+		cout.rdbuf(oss.rdbuf());
+
+		app.ReadAndPrint(address, value);
+
+		cout.rdbuf(oldCoutStreamBuf);
+		return oss.str();
+	}
+	
 };
 
 TEST_F(DeviceDeriverTestFixture, ReadOK) {
@@ -33,10 +48,35 @@ TEST_F(DeviceDeriverTestFixture, ReadNotSame) {
 		.WillOnce(Return(1))
 		.WillOnce(Return(0));
 
-	EXPECT_THROW(dd.read(0), std::runtime_error);
+	try {
+		dd.read(0);
+	}
+	catch (std::exception& e) {
+		EXPECT_EQ(std::string{ "ReadFailException" }, e.what());
+	}
 }
 
-TEST_F(DeviceDeriverTestFixture, WriteOK) {
+//Write
+TEST_F(DeviceDeriverTestFixture, ReadBeforeWrite) {
+	EXPECT_CALL(mockFlash, read(0x00))
+		.Times(5)
+		.WillRepeatedly(Return(0xFF));
+	dd.write(0, 1);
+}
+
+TEST_F(DeviceDeriverTestFixture, WriteNotEmpty) {
+	EXPECT_CALL(mockFlash, read(0x00))
+		.Times(5)
+		.WillRepeatedly(Return(0xDA));
+	try {
+		dd.write(0,1);
+	}
+	catch (std::exception& e) {
+		EXPECT_EQ(std::string{ "WriteFailException" }, e.what());
+	}
+}
+
+TEST_F(DeviceDeriverTestFixture, WriteAndReadValueSame) {
 	int data[1000] = { 0 };
 	EXPECT_CALL(mockFlash, read(_)).WillRepeatedly(Return(0xFF));
 	EXPECT_CALL(mockFlash, write(_,_))
@@ -50,10 +90,29 @@ TEST_F(DeviceDeriverTestFixture, WriteOK) {
 }
 
 
-TEST_F(DeviceDeriverTestFixture, WriteNotEmpty) {
-	int data[1000] = { 0 };
-	EXPECT_CALL(mockFlash, read(_)).WillRepeatedly(Return(3));
-
-	EXPECT_THROW(dd.write(10,2), std::runtime_error);
+//App
+TEST_F(DeviceDeriverTestFixture, ReadAndPrint) {
+	int startAddr = 0;
+	int endAddr = 3;
+	int value = 3;
+	string expected = "";
+	for (int addr = startAddr; addr <= endAddr; addr++) {
+		EXPECT_CALL(mockFlash, read(addr))
+			.Times(5)
+			.WillRepeatedly(Return(value));
+		expected += to_string(value) + " ";
+	}
+	expected += "\n";
+	EXPECT_EQ(expected, getPrintResult(startAddr, endAddr));
 }
 
+TEST_F(DeviceDeriverTestFixture, WiteAll) {
+	int value = 5;
+	EXPECT_CALL(mockFlash, read(_))
+		.Times(25)
+		.WillRepeatedly(Return(0xFF));
+
+	app.WriteAll(value);
+
+
+}
