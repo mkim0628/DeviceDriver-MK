@@ -1,7 +1,7 @@
-#include "pch.h"
+#include "gtest/gtest.h"
+#include "gmock/gmock.h"
 #include "../DeviceDriver/DeviceDriver.cpp"
 
-TEST(TestCaseName, TestName) {
-  EXPECT_EQ(1, 1);
-  EXPECT_TRUE(true);
+TEST(DeviceDriverTest, Read) {
+	EXPECT_EQ(1, 1);
 }
